@@ -152,126 +152,94 @@ BlockSnap/
 
 ### Prerequisites
 
-#### Hardware Requirements
-
-- **Raspberry Pi**
-  - Model 4B (2GB+ RAM) or 3B+
-  - MicroSD card (16GB+)
-  - Power supply (3A)
-
-- **Camera Module**
-  - Raspberry Pi Camera Module v2
-  - or compatible camera
-
-- **Optional Hardware**
-  - GPS Module (for location tagging)
-  - Touchscreen display
-  - GPIO buttons
-
-#### Software Requirements
-
-- **Operating System**
-  - Raspberry Pi OS (64-bit)
-  - or Ubuntu 22.04+
-
-- **Development Tools**
-  - Python 3.11+
-  - Node.js 16+
-  - npm/yarn
-  - Git
-
-- **Blockchain Tools**
-  - MetaMask
-  - Hardhat
-  - IPFS
+- Python 3.11+
+- Node.js and npm
+- IPFS daemon
+- Conda (for environment management)
+- MetaMask wallet
+- BuildBear testnet access
 
 ### Installation
 
-1. **System Setup**
+1. **Clone the repository:**
    ```bash
-   # Update system
-   sudo apt update && sudo apt upgrade -y
-
-   # Install dependencies
-   sudo apt install -y python3-pip nodejs npm git
-   ```
-
-2. **IPFS Setup**
-   ```bash
-   # Download and install IPFS
-   wget https://dist.ipfs.io/go-ipfs/v0.12.0/go-ipfs_v0.12.0_linux-amd64.tar.gz
-   tar -xvzf go-ipfs_v0.12.0_linux-amd64.tar.gz
-   cd go-ipfs
-   sudo bash install.sh
-   ipfs init
-   ```
-
-3. **Project Setup**
-   ```bash
-   # Clone repository
-   git clone https://github.com/yourusername/BlockSnap.git
+   git clone <repository-url>
    cd BlockSnap
+   ```
 
-   # Setup Python environment
-   python -m venv venv
-   source venv/bin/activate
+2. **Set up Python environment:**
+   ```bash
+   conda create -n blocksnap python=3.11
+   conda activate blocksnap
    pip install -r requirements.txt
+   ```
 
-   # Setup frontend
-   cd frontend
+3. **Install Node.js dependencies:**
+   ```bash
    npm install
    ```
 
-### Configuration
+4. **Start IPFS daemon:**
+   ```bash
+   ipfs daemon
+   ```
 
-1. **Environment Setup**
-   Create `.env` file:
+5. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
+   Update `.env` with your configuration:
    ```env
    # Ethereum Network Configuration
    ETH_RPC_URL=https://rpc.buildbear.io/impossible-omegared-15eaf7dd
-   CONTRACT_ADDRESS=0xf704DFa3606aDaa28e3D490A454178775Ad75EdC
-   PRIVATE_KEY=YOUR_PRIVATE_KEY
+   CONTRACT_ADDRESS=<your-contract-address>
+   PRIVATE_KEY=<your-private-key>
 
    # IPFS Configuration
-   IPFS_HOST=/ip4/127.0.0.1/tcp/5001
-   IPFS_GATEWAY=https://ipfs.io
+   IPFS_HOST=http://127.0.0.1:5001
+   IPFS_GATEWAY=http://127.0.0.1:8080
    USE_PINATA=false
-   PINATA_API_KEY=your_pinata_api_key
-   PINATA_SECRET_KEY=your_pinata_secret_key
-
-   # Hardware Configuration
-   CAMERA_RESOLUTION=1920x1080
-   SHUTTER_PIN=17
-   LED_PIN=27
-   USE_GPS=false
-   GPS_PORT=/dev/ttyUSB0
    ```
 
-2. **Smart Contract Deployment**
+### Smart Contract Deployment
+
+1. **Compile contract:**
    ```bash
-   # Deploy contract to BuildBear network
-   npx hardhat run scripts/deploy.js --network buildbear
-
-   # Note: BuildBear network configuration is already set in hardhat.config.js
-   # with chainId: 22566
+   npx hardhat clean
+   npx hardhat compile
    ```
 
-### Network Configuration
+2. **Deploy to BuildBear:**
+   ```bash
+   npx hardhat run scripts/deploy.js --network buildbear
+   ```
 
-BlockSnap uses BuildBear's testnet for development and testing. BuildBear provides:
-- Instant testnet setup
-- Fast block times
-- Built-in block explorer
-- No faucet needed - test ETH readily available
+3. Update `CONTRACT_ADDRESS` in `.env`
 
-To use the BuildBear network:
-1. Ensure your MetaMask is configured with the following:
-   - Network Name: BuildBear Testnet
-   - RPC URL: https://rpc.buildbear.io/impossible-omegared-15eaf7dd
-   - Chain ID: 22566
-   - Currency Symbol: ETH
+### Running the Application
 
-2. The smart contract is deployed at: `0xf704DFa3606aDaa28e3D490A454178775Ad75EdC`
+1. **Start backend server:**
+   ```bash
+   conda activate blocksnap
+   /home/hrithik/miniconda3/envs/blocksnap/bin/python main.py
+   ```
+
+2. **Start frontend:**
+   ```bash
+   npm start
+   ```
+
+3. Access the app at `http://localhost:3000`
+
+## 🎯 Features
+
+- 📸 Web-based photo capture
+- 🖼️ IPFS storage with local node or Pinata
+- 🎨 NFT minting for each photo
+- 🗃️ Gallery view with IPFS integration
+- 📋 One-click IPFS CID copying
+- ⛓️ Blockchain verification
+- 🔐 MetaMask wallet integration
 
 ## 📱 Usage Guide
 
@@ -375,13 +343,12 @@ function verifyPhoto(
 
 2. **Start Backend**
    ```bash
-   source venv/bin/activate
-   python main.py
+   conda activate blocksnap
+   /home/hrithik/miniconda3/envs/blocksnap/bin/python main.py
    ```
 
 3. **Start Frontend**
    ```bash
-   cd frontend
    npm start
    ```
 
