@@ -227,17 +227,17 @@ BlockSnap/
 1. **Environment Setup**
    Create `.env` file:
    ```env
-   # Ethereum Configuration
-   ETH_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
-   CONTRACT_ADDRESS=YOUR_CONTRACT_ADDRESS
+   # Ethereum Network Configuration
+   ETH_RPC_URL=https://rpc.buildbear.io/impossible-omegared-15eaf7dd
+   CONTRACT_ADDRESS=0xf704DFa3606aDaa28e3D490A454178775Ad75EdC
    PRIVATE_KEY=YOUR_PRIVATE_KEY
 
    # IPFS Configuration
    IPFS_HOST=/ip4/127.0.0.1/tcp/5001
    IPFS_GATEWAY=https://ipfs.io
    USE_PINATA=false
-   PINATA_API_KEY=your_key
-   PINATA_SECRET_KEY=your_secret
+   PINATA_API_KEY=your_pinata_api_key
+   PINATA_SECRET_KEY=your_pinata_secret_key
 
    # Hardware Configuration
    CAMERA_RESOLUTION=1920x1080
@@ -249,12 +249,29 @@ BlockSnap/
 
 2. **Smart Contract Deployment**
    ```bash
-   # Deploy contract
-   npx hardhat run scripts/deploy.js --network sepolia
+   # Deploy contract to BuildBear network
+   npx hardhat run scripts/deploy.js --network buildbear
 
-   # Verify contract
-   npx hardhat verify --network sepolia DEPLOYED_ADDRESS
+   # Note: BuildBear network configuration is already set in hardhat.config.js
+   # with chainId: 22566
    ```
+
+### Network Configuration
+
+BlockSnap uses BuildBear's testnet for development and testing. BuildBear provides:
+- Instant testnet setup
+- Fast block times
+- Built-in block explorer
+- No faucet needed - test ETH readily available
+
+To use the BuildBear network:
+1. Ensure your MetaMask is configured with the following:
+   - Network Name: BuildBear Testnet
+   - RPC URL: https://rpc.buildbear.io/impossible-omegared-15eaf7dd
+   - Chain ID: 22566
+   - Currency Symbol: ETH
+
+2. The smart contract is deployed at: `0xf704DFa3606aDaa28e3D490A454178775Ad75EdC`
 
 ## 📱 Usage Guide
 
@@ -390,10 +407,11 @@ npm test
    - Verify port accessibility
    - Check network connectivity
 
-2. **Blockchain Issues**
-   - Verify network selection
-   - Check gas prices
-   - Confirm wallet connection
+2. **BuildBear Network Issues**
+   - Verify RPC URL is correct and accessible
+   - Ensure chainId is set to 22566
+   - Check if the network is responsive
+   - Verify contract deployment status
 
 3. **Camera Problems**
    - Enable camera interface

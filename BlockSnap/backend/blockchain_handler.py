@@ -18,7 +18,7 @@ class BlockchainHandler:
         self.logger = logging.getLogger(__name__)
         
         # Load environment variables
-        self.rpc_url = os.getenv('ETH_RPC_URL', 'https://sepolia.infura.io/v3/YOUR-PROJECT-ID')
+        self.rpc_url = os.getenv('ETH_RPC_URL', 'https://rpc.buildbear.io/impossible-omegared-15eaf7dd')
         self.contract_address = os.getenv('CONTRACT_ADDRESS')
         self.private_key = os.getenv('PRIVATE_KEY')
         

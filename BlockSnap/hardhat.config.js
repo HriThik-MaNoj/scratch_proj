@@ -17,17 +17,9 @@ module.exports = {
     hardhat: {
       chainId: 1337
     },
-    sepolia: {
-      url: process.env.ETH_RPC_URL || "https://sepolia.infura.io/v3/YOUR-PROJECT-ID",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
-    },
-    zkSyncTestnet: {
-      url: process.env.ETH_RPC_URL,
-      accounts: [process.env.PRIVATE_KEY]
-    },
     buildbear: {
-      url: process.env.ETH_RPC_URL,
-      accounts: [process.env.PRIVATE_KEY],
+      url: process.env.ETH_RPC_URL || "https://rpc.buildbear.io/impossible-omegared-15eaf7dd",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 22566
     }
   },

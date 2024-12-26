@@ -26,11 +26,11 @@ function Navbar() {
         throw new Error('Please install MetaMask to connect your wallet');
       }
 
-      // Try to switch to Sepolia network first
+      // Try to switch to BuildBear network first
       try {
         await window.ethereum.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xaa36a7' }], // Sepolia chainId in hex
+          params: [{ chainId: '0x5826' }], // BuildBear chainId in hex (22566)
         });
       } catch (switchError) {
         // This error code indicates that the chain has not been added to MetaMask
@@ -40,23 +40,23 @@ function Navbar() {
               method: 'wallet_addEthereumChain',
               params: [
                 {
-                  chainId: '0xaa36a7',
-                  chainName: 'Sepolia Testnet',
+                  chainId: '0x5826',
+                  chainName: 'BuildBear Testnet',
                   nativeCurrency: {
-                    name: 'Sepolia ETH',
-                    symbol: 'SEP',
+                    name: 'ETH',
+                    symbol: 'ETH',
                     decimals: 18
                   },
-                  rpcUrls: ['https://sepolia.infura.io/v3/'],
-                  blockExplorerUrls: ['https://sepolia.etherscan.io']
+                  rpcUrls: ['https://rpc.buildbear.io/impossible-omegared-15eaf7dd'],
+                  blockExplorerUrls: ['https://explorer.buildbear.io/impossible-omegared-15eaf7dd']
                 },
               ],
             });
           } catch (addError) {
-            throw new Error('Failed to add Sepolia network to MetaMask');
+            throw new Error('Failed to add BuildBear network to MetaMask');
           }
         } else {
-          throw new Error('Please switch to Sepolia network in MetaMask');
+          throw new Error('Please switch to BuildBear network in MetaMask');
         }
       }
 
