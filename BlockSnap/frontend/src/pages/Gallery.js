@@ -82,7 +82,7 @@ function Gallery() {
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
             {nfts.map((nft) => (
               <Box
-                key={nft.tokenId}
+                key={nft.token_id}
                 bg="gray.800"
                 borderRadius="lg"
                 overflow="hidden"
@@ -90,18 +90,18 @@ function Gallery() {
                 _hover={{ transform: 'scale(1.02)' }}
               >
                 <Image
-                  src={nft.imageUrl}
-                  alt={`NFT ${nft.tokenId}`}
+                  src={nft.image_url}
+                  alt={`NFT ${nft.token_id}`}
                   w="100%"
                   h="300px"
                   objectFit="cover"
                 />
                 <VStack p={4} align="stretch" spacing={2}>
                   <Text color="white" fontWeight="bold">
-                    Token ID: {nft.tokenId}
+                    Token ID: {nft.token_id}
                   </Text>
                   <Text color="gray.400" fontSize="sm" isTruncated>
-                    IPFS CID: {nft.ipfsCid}
+                    IPFS CID: {nft.ipfs_cid}
                   </Text>
                   <Badge colorScheme="blue" alignSelf="flex-start">
                     {nft.type || 'Photo'}

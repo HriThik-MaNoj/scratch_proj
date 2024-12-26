@@ -2,11 +2,11 @@
 
 import os
 import logging
-from dotenv import load_dotenv
-from pathlib import Path
 import requests
 import json
 from typing import Dict, Tuple, Optional
+from datetime import datetime
+from dotenv import load_dotenv
 
 class IPFSHandler:
     def __init__(self):
@@ -15,8 +15,8 @@ class IPFSHandler:
         
         # Load environment variables
         load_dotenv()
-        self.ipfs_host = os.getenv('IPFS_HOST', '/ip4/127.0.0.1/tcp/5001').replace('/ip4/127.0.0.1/tcp/', 'http://localhost:')
-        self.ipfs_gateway = os.getenv('IPFS_GATEWAY', 'https://ipfs.io')
+        self.ipfs_host = os.getenv('IPFS_HOST', 'http://127.0.0.1:5001')
+        self.ipfs_gateway = os.getenv('IPFS_GATEWAY', 'http://127.0.0.1:8080')
         self.use_pinata = os.getenv('USE_PINATA', 'false').lower() == 'true'
         self.pinata_api_key = os.getenv('PINATA_API_KEY')
         self.pinata_secret_key = os.getenv('PINATA_SECRET_KEY')
@@ -33,25 +33,53 @@ class IPFSHandler:
     def add_file(self, file_path: str) -> str:
         """Add a file to IPFS and return its CID"""
         try:
-            if isinstance(file_path, str) and not os.path.isfile(file_path):
-                # If it's a string but not a file path, treat it as content
-                files = {
-                    'file': ('content.txt', file_path.encode())
+            if self.use_pinata:
+                # Use Pinata for file upload
+                if isinstance(file_path, str) and not os.path.isfile(file_path):
+                    files = {
+                        'file': ('content.txt', file_path.encode())
+                    }
+                else:
+                    files = {
+                        'file': ('file', open(file_path, 'rb'))
+                    }
+
+                headers = {
+                    'pinata_api_key': self.pinata_api_key,
+                    'pinata_secret_api_key': self.pinata_secret_key
                 }
+
+                response = requests.post(
+                    'https://api.pinata.cloud/pinning/pinFileToIPFS',
+                    files=files,
+                    headers=headers
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                cid = result['IpfsHash']
             else:
-                # It's a file path
-                files = {
-                    'file': ('file', open(file_path, 'rb'))
-                }
-            
-            response = requests.post(
-                f"{self.ipfs_host}/api/v0/add",
-                files=files
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            cid = result['Hash']
+                # Use local IPFS node
+                if isinstance(file_path, str) and not os.path.isfile(file_path):
+                    files = {
+                        'file': ('content.txt', file_path.encode())
+                    }
+                else:
+                    files = {
+                        'file': ('file', open(file_path, 'rb'))
+                    }
+                
+                response = requests.post(
+                    f"{self.ipfs_host}/api/v0/add",
+                    files=files
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                cid = result['Hash']
+                
+                # Pin the file locally
+                self.pin_file(cid)
             
             if isinstance(file_path, str) and os.path.isfile(file_path):
                 files['file'][1].close()
@@ -62,81 +90,65 @@ class IPFSHandler:
             self.logger.error(f"Error adding file to IPFS: {str(e)}")
             raise
 
-    def get_file(self, cid: str, output_path: str) -> bool:
-        """Retrieve a file from IPFS by its CID"""
-        try:
-            # Create output directory if it doesn't exist
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            
-            # Try local IPFS node first
-            try:
-                response = requests.post(
-                    f"{self.ipfs_host}/api/v0/cat",
-                    params={'arg': cid},
-                    stream=True
-                )
-                response.raise_for_status()
-            except Exception as local_error:
-                # If local node fails, try IPFS gateway
-                self.logger.warning(f"Failed to get file from local node: {str(local_error)}")
-                response = requests.get(f"{self.ipfs_gateway}/ipfs/{cid}", stream=True)
-                response.raise_for_status()
-            
-            with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            self.logger.info(f"Retrieved file from IPFS: {cid}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Error retrieving file from IPFS: {str(e)}")
-            raise
-
-    def pin_file(self, cid: str) -> bool:
-        """Pin a file to keep it in IPFS"""
+    def pin_file(self, cid: str) -> None:
+        """Pin a file on IPFS"""
         try:
             response = requests.post(
                 f"{self.ipfs_host}/api/v0/pin/add",
                 params={'arg': cid}
             )
             response.raise_for_status()
-            
-            self.logger.info(f"Pinned file in IPFS: {cid}")
-            return True
+            self.logger.info(f"Successfully pinned CID: {cid}")
         except Exception as e:
-            self.logger.error(f"Error pinning file in IPFS: {str(e)}")
+            self.logger.error(f"Error pinning file: {str(e)}")
             raise
 
-    def _pin_to_pinata(self, cid: str) -> None:
-        """Pin a CID to Pinata"""
-        if not (self.pinata_api_key and self.pinata_secret_key):
-            self.logger.warning("Pinata credentials not configured")
-            return
-            
+    def upload_to_ipfs(self, file_path: str, metadata: Dict) -> Tuple[str, str]:
+        """
+        Upload file and metadata to IPFS
+        Returns: Tuple(file_cid, metadata_cid)
+        """
         try:
-            headers = {
-                'pinata_api_key': self.pinata_api_key,
-                'pinata_secret_api_key': self.pinata_secret_key
+            # Upload the file first
+            file_cid = self.add_file(file_path)
+            self.logger.info(f"File uploaded to IPFS with CID: {file_cid}")
+            
+            # Create metadata with proper NFT format
+            full_metadata = {
+                'name': f'BlockSnap #{datetime.now().strftime("%Y%m%d%H%M%S")}',
+                'description': 'A photo captured and authenticated using BlockSnap',
+                'image': f'ipfs://{file_cid}',
+                'image_url': self.get_ipfs_url(file_cid),
+                'attributes': [
+                    {
+                        'trait_type': 'Platform',
+                        'value': metadata.get('platform', 'Unknown')
+                    },
+                    {
+                        'trait_type': 'Source',
+                        'value': metadata.get('source', 'Unknown')
+                    },
+                    {
+                        'trait_type': 'Timestamp',
+                        'value': metadata.get('timestamp', datetime.now().isoformat())
+                    }
+                ]
             }
             
-            json_data = {
-                'hashToPin': cid,
-                'pinataMetadata': {
-                    'name': f'BlockSnap_{cid}'
-                }
-            }
+            # Upload metadata
+            metadata_cid = self.add_file(json.dumps(full_metadata))
+            self.logger.info(f"Metadata uploaded to IPFS with CID: {metadata_cid}")
             
-            response = requests.post(
-                'https://api.pinata.cloud/pinning/pinByHash',
-                headers=headers,
-                json=json_data
-            )
-            response.raise_for_status()
+            # Pin to Pinata if configured
+            if self.use_pinata:
+                self._pin_to_pinata(file_cid)
+                self._pin_to_pinata(metadata_cid)
             
-            self.logger.info(f"Successfully pinned {cid} to Pinata")
-                
+            return file_cid, metadata_cid
+            
         except Exception as e:
-            self.logger.error(f"Error pinning to Pinata: {str(e)}")
+            self.logger.error(f"Error uploading to IPFS: {str(e)}")
+            raise
 
     def get_ipfs_url(self, cid: str) -> str:
         """Get a gateway URL for the IPFS content"""
@@ -154,32 +166,23 @@ class IPFSHandler:
         except Exception:
             return False
 
-    def upload_to_ipfs(self, file_path: str, metadata: Dict) -> Tuple[str, str]:
-        """
-        Upload file and metadata to IPFS
-        Returns: Tuple(file_cid, metadata_cid)
-        """
+    def _pin_to_pinata(self, cid: str) -> None:
+        """Pin a file to Pinata"""
         try:
-            # Upload the file
-            file_cid = self.add_file(file_path)
-            self.logger.info(f"File uploaded to IPFS with CID: {file_cid}")
-            
-            # Add IPFS CID to metadata
-            metadata['ipfs_cid'] = file_cid
-            
-            # Upload metadata
-            metadata_cid = self.add_file(json.dumps(metadata))
-            self.logger.info(f"Metadata uploaded to IPFS with CID: {metadata_cid}")
-            
-            # Pin to Pinata if configured
-            if self.use_pinata:
-                self._pin_to_pinata(file_cid)
-                self._pin_to_pinata(metadata_cid)
-            
-            return file_cid, metadata_cid
-            
+            headers = {
+                'pinata_api_key': self.pinata_api_key,
+                'pinata_secret_api_key': self.pinata_secret_key
+            }
+
+            response = requests.post(
+                'https://api.pinata.cloud/pinning/pinByHash',
+                json={'hashToPin': cid},
+                headers=headers
+            )
+            response.raise_for_status()
+            self.logger.info(f"Successfully pinned CID to Pinata: {cid}")
         except Exception as e:
-            self.logger.error(f"Error uploading to IPFS: {str(e)}")
+            self.logger.error(f"Error pinning to Pinata: {str(e)}")
             raise
 
 if __name__ == "__main__":

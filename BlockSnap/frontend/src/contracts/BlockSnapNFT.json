@@ -1,5 +1,5 @@
 {
-  "address": "0xf704DFa3606aDaa28e3D490A454178775Ad75EdC",
+  "address": "0x890f9EE3e697087dE2599E4A53DDdCa87D0400a8",
   "abi": [
     {
       "inputs": [],
@@ -377,6 +377,19 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "getNextTokenId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -663,5 +676,5 @@
     }
   ],
   "network": "buildbear",
-  "deploymentTime": "2024-12-26T06:41:13.001Z"
+  "deploymentTime": "2024-12-26T13:20:50.155Z"
 }

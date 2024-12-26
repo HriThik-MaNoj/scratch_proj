@@ -31,10 +31,14 @@ class BlockchainHandler:
             raise ConnectionError("Failed to connect to Ethereum network")
         
         # Load contract ABI
-        contract_path = Path(__file__).parent.parent / 'smart_contracts' / 'BlockSnapNFT.json'
+        contract_path = Path(__file__).parent.parent / 'artifacts' / 'smart_contracts' / 'BlockSnapNFT.sol' / 'BlockSnapNFT.json'
+        if not contract_path.exists():
+            raise FileNotFoundError(f"Contract ABI file not found at {contract_path}")
+            
         with open(contract_path) as f:
             contract_json = json.load(f)
             self.contract_abi = contract_json['abi']
+            self.logger.info("Successfully loaded contract ABI")
         
         # Initialize contract
         self.contract = self.w3.eth.contract(
@@ -116,16 +120,6 @@ class BlockchainHandler:
             self.logger.error(f"Error getting image CID: {str(e)}")
             raise
 
-if __name__ == "__main__":
-    # Example usage
-    handler = BlockchainHandler()
-    
-    # Test verification
-    test_cid = "QmTest123"
-    exists, owner = handler.verify_photo(test_cid)
-    print(f"Photo exists: {exists}")
-    if exists:
-        print(f"Owner: {owner}") 
 if __name__ == "__main__":
     # Example usage
     handler = BlockchainHandler()

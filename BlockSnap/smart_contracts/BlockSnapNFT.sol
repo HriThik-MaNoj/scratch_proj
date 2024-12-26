@@ -67,6 +67,10 @@ contract BlockSnapNFT is ERC721URIStorage, Ownable {
         return (false, address(0));
     }
     
+    function getNextTokenId() public view returns (uint256) {
+        return _nextTokenId;
+    }
+    
     function burn(uint256 tokenId) public {
         require(ownerOf(tokenId) == msg.sender, "Not token owner");
         super._burn(tokenId);

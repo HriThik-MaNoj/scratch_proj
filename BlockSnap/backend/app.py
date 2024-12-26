@@ -177,6 +177,56 @@ def get_token_info(token_id):
         logger.error(f"Error in token info endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/nfts/<wallet_address>', methods=['GET'])
+def get_nfts_by_wallet(wallet_address):
+    """Get all NFTs owned by a wallet address"""
+    try:
+        # Get the event signature for PhotoMinted
+        event_signature_hash = blockchain_handler.w3.keccak(text="PhotoMinted(uint256,address,string,string)").hex()
+        
+        # Get logs for the PhotoMinted event
+        logs = blockchain_handler.w3.eth.get_logs({
+            'address': blockchain_handler.contract.address,
+            'topics': [event_signature_hash],
+            'fromBlock': 0,
+            'toBlock': 'latest'
+        })
+        
+        app.logger.info(f"Found {len(logs)} total PhotoMinted events")
+        
+        nfts = []
+        # Check each token from logs
+        for log in logs:
+            try:
+                # Decode the log data
+                decoded_log = blockchain_handler.contract.events.PhotoMinted().process_log(log)
+                token_id = decoded_log['args']['tokenId']
+                
+                # Check if this wallet owns the token
+                owner = blockchain_handler.contract.functions.ownerOf(token_id).call()
+                if owner.lower() == wallet_address.lower():
+                    # Get token details
+                    metadata_uri = blockchain_handler.get_token_uri(token_id)
+                    image_cid = blockchain_handler.get_image_cid(token_id)
+                    
+                    nft = {
+                        'token_id': token_id,
+                        'metadata_uri': metadata_uri,
+                        'image_cid': image_cid,
+                        'image_url': ipfs_handler.get_ipfs_url(image_cid)
+                    }
+                    nfts.append(nft)
+                    app.logger.info(f"Found NFT {token_id} owned by {wallet_address}")
+            except Exception as e:
+                app.logger.error(f"Error processing log: {str(e)}")
+                continue
+        
+        return jsonify({'nfts': nfts})
+        
+    except Exception as e:
+        app.logger.error(f"Error in get NFTs endpoint: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 def cleanup():
     """Cleanup resources on shutdown"""
     try:

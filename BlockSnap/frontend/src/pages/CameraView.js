@@ -45,9 +45,13 @@ function CameraView() {
     }
 
     try {
-      // Convert base64 to blob
-      const response = await fetch(imgSrc);
-      const blob = await response.blob();
+      toast({
+        title: 'Processing',
+        description: 'Uploading to IPFS and minting NFT...',
+        status: 'info',
+        duration: null,
+        isClosable: false,
+      });
 
       // Send to backend
       const result = await axios.post('http://localhost:5000/capture', {
@@ -59,19 +63,36 @@ function CameraView() {
         },
       });
 
+      const { token_id, image_url, transaction_hash } = result.data.data;
+
       toast({
         title: 'Success!',
-        description: `Image captured and minted as NFT. Token ID: ${result.data.data.token_id}`,
+        description: (
+          <VStack align="start">
+            <Text>NFT successfully minted!</Text>
+            <Text>Token ID: {token_id}</Text>
+            <Text>
+              <a href={`https://testnet.buildbear.io/tx/${transaction_hash}`} target="_blank" rel="noopener noreferrer">
+                View on BuildBear Explorer
+              </a>
+            </Text>
+          </VStack>
+        ),
         status: 'success',
-        duration: 5000,
+        duration: 10000,
+        isClosable: true,
       });
 
       onClose();
       setImgSrc(null);
+      
+      // Redirect to gallery
+      window.location.href = '/gallery';
     } catch (error) {
+      console.error('Error:', error);
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.response?.data?.error || error.message || 'Failed to mint NFT',
         status: 'error',
         duration: 5000,
       });
