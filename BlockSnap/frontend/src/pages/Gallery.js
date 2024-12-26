@@ -10,8 +10,12 @@ import {
   Spinner,
   Center,
   Button,
+  HStack,
+  IconButton,
+  Tooltip,
 } from '@chakra-ui/react';
 import { useWeb3React } from '@web3-react/core';
+import { CopyIcon } from '@chakra-ui/icons';
 import axios from 'axios';
 
 function Gallery() {
@@ -40,6 +44,16 @@ function Gallery() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: 'Copied!',
+      description: 'IPFS CID copied to clipboard',
+      status: 'success',
+      duration: 2000,
+    });
   };
 
   if (!active) {
@@ -100,9 +114,21 @@ function Gallery() {
                   <Text color="white" fontWeight="bold">
                     Token ID: {nft.token_id}
                   </Text>
-                  <Text color="gray.400" fontSize="sm" isTruncated>
-                    IPFS CID: {nft.ipfs_cid}
-                  </Text>
+                  <HStack justify="space-between" align="center">
+                    <Text color="gray.400" fontSize="sm" isTruncated maxW="80%">
+                      IPFS CID: {nft.image_cid}
+                    </Text>
+                    <Tooltip label="Copy CID" placement="top">
+                      <IconButton
+                        icon={<CopyIcon />}
+                        size="sm"
+                        variant="ghost"
+                        colorScheme="blue"
+                        onClick={() => handleCopy(nft.image_cid)}
+                        aria-label="Copy CID"
+                      />
+                    </Tooltip>
+                  </HStack>
                   <Badge colorScheme="blue" alignSelf="flex-start">
                     {nft.type || 'Photo'}
                   </Badge>
@@ -116,4 +142,4 @@ function Gallery() {
   );
 }
 
-export default Gallery; 
+export default Gallery;
