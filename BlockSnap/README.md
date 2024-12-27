@@ -69,6 +69,45 @@ PINATA_API_KEY=
 PINATA_SECRET_KEY=
 ```
 
+## Quick Start with Automated Script
+
+We provide an automated script to simplify the startup process:
+
+1. **First-time setup:**
+   ```bash
+   ./run.sh --setup
+   ```
+   This will:
+   - Create the conda environment
+   - Install Python dependencies
+   - Install Node.js dependencies
+
+2. **Regular startup:**
+   ```bash
+   ./run.sh
+   ```
+   This will automatically:
+   - Start IPFS daemon
+   - Start the Flask backend server
+   - Launch the React frontend
+   - Set up all necessary connections
+
+3. **Access the application:**
+   - Frontend: http://localhost:3000
+   - Backend: http://localhost:5000
+   - IPFS Gateway: http://localhost:8080
+
+4. **Stop all services:**
+   - Press Ctrl+C in the terminal running the script
+   - The script will gracefully shut down all services
+
+The script includes:
+- Dependency checks
+- Environment setup
+- Port management
+- Process cleanup
+- Error handling
+
 ## Smart Contract Deployment
 
 1. Compile the smart contract:
