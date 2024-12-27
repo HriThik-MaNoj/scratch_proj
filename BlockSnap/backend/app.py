@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import logging
 from pathlib import Path
@@ -9,6 +9,8 @@ import platform
 from dotenv import load_dotenv
 from datetime import datetime
 import json
+import cv2
+import time
 
 # Import our custom modules
 try:
@@ -22,6 +24,7 @@ except (ImportError, RuntimeError):
 
 from backend.ipfs_handler import IPFSHandler
 from backend.blockchain_handler import BlockchainHandler
+from backend.dashcam_manager import DashcamManager  # Import DashcamManager
 
 # Load environment variables
 load_dotenv()
@@ -46,6 +49,7 @@ try:
     
     ipfs_handler = IPFSHandler()
     blockchain_handler = BlockchainHandler()
+    dashcam_manager = DashcamManager()  # Initialize dashcam manager
     logger.info("All components initialized successfully")
 except Exception as e:
     logger.error(f"Error initializing components: {str(e)}")
@@ -226,6 +230,119 @@ def get_nfts_by_wallet(wallet_address):
     except Exception as e:
         app.logger.error(f"Error in get NFTs endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# Video capture routes
+@app.route('/api/dashcam/start', methods=['POST'])
+def start_dashcam():
+    """Start dashcam recording"""
+    try:
+        success = dashcam_manager.start_recording()
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': 'Recording started',
+                'session_id': dashcam_manager.session_id
+            })
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to start recording'
+        }), 500
+    except Exception as e:
+        app.logger.error(f"Error starting recording: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/dashcam/stop', methods=['POST'])
+def stop_dashcam():
+    """Stop dashcam recording"""
+    try:
+        dashcam_manager.stop_recording()
+        return jsonify({
+            'status': 'success',
+            'message': 'Recording stopped'
+        })
+    except Exception as e:
+        app.logger.error(f"Error stopping recording: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/dashcam/status', methods=['GET'])
+def get_dashcam_status():
+    """Get dashcam status"""
+    try:
+        status = dashcam_manager.get_status()
+        return jsonify({
+            'status': 'success',
+            'data': status
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting status: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/dashcam/preview', methods=['GET'])
+def get_dashcam_preview():
+    """Get video preview stream"""
+    try:
+        def generate_frames():
+            while dashcam_manager.is_recording:
+                frame = dashcam_manager.recorder.get_preview_frame()
+                if frame is not None:
+                    # Encode frame to JPEG
+                    ret, buffer = cv2.imencode('.jpg', frame)
+                    if ret:
+                        frame_bytes = buffer.tobytes()
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                time.sleep(1/30)  # 30 FPS
+
+        return Response(
+            generate_frames(),
+            mimetype='multipart/x-mixed-replace; boundary=frame'
+        )
+    except Exception as e:
+        app.logger.error(f"Error in preview stream: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/dashcam/latest-chunk', methods=['GET'])
+def get_dashcam_latest_chunk():
+    """Get latest recorded chunk"""
+    try:
+        if not dashcam_manager.is_recording:
+            return jsonify({
+                'status': 'error',
+                'message': 'Not recording'
+            }), 400
+
+        latest = dashcam_manager.get_latest_chunk()
+        if latest:
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'video_url': f"{ipfs_handler.ipfs_gateway}/ipfs/{latest['video_cid']}",
+                    'metadata_url': f"{ipfs_handler.ipfs_gateway}/ipfs/{latest['metadata_cid']}",
+                    'sequence_number': latest['sequence_number']
+                }
+            })
+        return jsonify({
+            'status': 'error',
+            'message': 'No chunks available'
+        }), 404
+    except Exception as e:
+        app.logger.error(f"Error getting latest chunk: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 def cleanup():
     """Cleanup resources on shutdown"""

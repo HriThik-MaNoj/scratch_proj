@@ -7,6 +7,7 @@ import { ethers } from 'ethers';
 // Components
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import DashcamControls from './components/DashcamControls';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -38,6 +39,7 @@ function App() {
                   <Route path="/dashcam" element={<DashcamView />} />
                   <Route path="/verify" element={<VerifyMedia />} />
                   <Route path="/gallery" element={<Gallery />} />
+                  <Route path="/dashcam-controls" element={<DashcamControls />} />
                 </Routes>
               </Box>
             </Box>

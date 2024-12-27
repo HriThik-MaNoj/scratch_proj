@@ -510,9 +510,9 @@
       "smart_contracts/BlockSnapNFT.sol:BlockSnapNFT": {
         "src": "smart_contracts/BlockSnapNFT.sol:8",
         "version": {
-          "withMetadata": "05bb6cf599f5d23b3c3e541b707b3c1dcca5a3fb752b93836898d2c65fc85587",
-          "withoutMetadata": "53e05022aaf38998cd5e67b61f75023f380a64b530591725cb20e579170dfab7",
-          "linkedWithoutMetadata": "53e05022aaf38998cd5e67b61f75023f380a64b530591725cb20e579170dfab7"
+          "withMetadata": "8045c145ba632c6a5ced94b5916afc18912d71bdf7c9640750d1f947b94ff4a3",
+          "withoutMetadata": "7899f737f3a1fd9f0fa197133f6f2bc8a0415c0295f92608cbb2f209e2598577",
+          "linkedWithoutMetadata": "7899f737f3a1fd9f0fa197133f6f2bc8a0415c0295f92608cbb2f209e2598577"
         },
         "inherit": [
           "@openzeppelin/contracts/access/Ownable.sol:Ownable",
@@ -532,6 +532,11 @@
           "mintPhoto(address,string,string)",
           "getImageCID(uint256)",
           "verifyPhoto(string)",
+          "startVideoSession()",
+          "addVideoChunk(uint256,uint256,string,string)",
+          "endVideoSession(uint256)",
+          "getSessionChunks(uint256)",
+          "isSessionActive(uint256)",
           "getNextTokenId()",
           "burn(uint256)"
         ],
@@ -540,7 +545,7 @@
           {
             "kind": "constructor",
             "contract": "BlockSnapNFT",
-            "src": "smart_contracts/BlockSnapNFT.sol:17"
+            "src": "smart_contracts/BlockSnapNFT.sol:34"
           }
         ],
         "layout": {
@@ -553,9 +558,33 @@
             },
             {
               "contract": "BlockSnapNFT",
+              "label": "_nextSessionId",
+              "type": "t_uint256",
+              "src": "smart_contracts/BlockSnapNFT.sol:10"
+            },
+            {
+              "contract": "BlockSnapNFT",
               "label": "_imageCIDs",
               "type": "t_mapping(t_uint256,t_string_storage)",
-              "src": "smart_contracts/BlockSnapNFT.sol:12"
+              "src": "smart_contracts/BlockSnapNFT.sol:21"
+            },
+            {
+              "contract": "BlockSnapNFT",
+              "label": "_sessionOwners",
+              "type": "t_mapping(t_uint256,t_address)",
+              "src": "smart_contracts/BlockSnapNFT.sol:24"
+            },
+            {
+              "contract": "BlockSnapNFT",
+              "label": "_sessionChunks",
+              "type": "t_mapping(t_uint256,t_array(t_struct(VideoChunk)5616_storage)dyn_storage)",
+              "src": "smart_contracts/BlockSnapNFT.sol:25"
+            },
+            {
+              "contract": "BlockSnapNFT",
+              "label": "_activeSessions",
+              "type": "t_mapping(t_uint256,t_bool)",
+              "src": "smart_contracts/BlockSnapNFT.sol:26"
             }
           ],
           "types": {
@@ -567,6 +596,49 @@
             },
             "t_string_storage": {
               "label": "string"
+            },
+            "t_mapping(t_uint256,t_address)": {
+              "label": "mapping(uint256 => address)"
+            },
+            "t_address": {
+              "label": "address"
+            },
+            "t_mapping(t_uint256,t_array(t_struct(VideoChunk)5616_storage)dyn_storage)": {
+              "label": "mapping(uint256 => struct BlockSnapNFT.VideoChunk[])"
+            },
+            "t_array(t_struct(VideoChunk)5616_storage)dyn_storage": {
+              "label": "struct BlockSnapNFT.VideoChunk[]"
+            },
+            "t_struct(VideoChunk)5616_storage": {
+              "label": "struct BlockSnapNFT.VideoChunk",
+              "members": [
+                {
+                  "label": "sessionId",
+                  "type": "t_uint256"
+                },
+                {
+                  "label": "sequenceNumber",
+                  "type": "t_uint256"
+                },
+                {
+                  "label": "videoCID",
+                  "type": "t_string_storage"
+                },
+                {
+                  "label": "metadataCID",
+                  "type": "t_string_storage"
+                },
+                {
+                  "label": "timestamp",
+                  "type": "t_uint256"
+                }
+              ]
+            },
+            "t_mapping(t_uint256,t_bool)": {
+              "label": "mapping(uint256 => bool)"
+            },
+            "t_bool": {
+              "label": "bool"
             }
           },
           "layoutVersion": "1.2",

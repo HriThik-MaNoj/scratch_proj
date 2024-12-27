@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   SimpleGrid,
@@ -24,13 +24,9 @@ function Gallery() {
   const { active, account } = useWeb3React();
   const toast = useToast();
 
-  useEffect(() => {
-    if (active && account) {
-      fetchNFTs();
-    }
-  }, [active, account]);
-
-  const fetchNFTs = async () => {
+  const fetchNFTs = useCallback(async () => {
+    if (!active || !account) return;
+    
     try {
       const response = await axios.get(`http://localhost:5000/nfts/${account}`);
       setNfts(response.data.nfts);
@@ -44,7 +40,13 @@ function Gallery() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [active, account]);
+
+  useEffect(() => {
+    if (active && account) {
+      fetchNFTs();
+    }
+  }, [active, account, fetchNFTs]);
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
