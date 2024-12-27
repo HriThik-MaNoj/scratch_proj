@@ -22,7 +22,7 @@
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
+- [Overview](#overview) 
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)
 - [Getting Started](#getting-started)
@@ -35,6 +35,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+- [Quick Start with Automated Script](#quick-start-with-automated-script)
 
 ## 🎯 Overview
 
@@ -324,7 +325,7 @@ BlockSnap/
    - View ownership history
    - Verify metadata
 
-## 📚 Technical Documentation
+## 📖 Technical Documentation
 
 ### API Reference
 
@@ -378,7 +379,7 @@ function verifyPhoto(
 ) public view returns (bool, address)
 ```
 
-## 🛠️ Development
+## 💻 Development
 
 ### Running Services
 
@@ -411,7 +412,7 @@ pytest
 npm test
 ```
 
-## 🔧 Troubleshooting
+## ❓ Troubleshooting
 
 ### Common Issues
 
@@ -453,6 +454,45 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) file for details
+
+## 🚀 Quick Start with Automated Script
+
+We provide an automated script to simplify the startup process:
+
+1. **First-time setup:**
+   ```bash
+   ./run.sh --setup
+   ```
+   This will:
+   - Create the conda environment
+   - Install Python dependencies
+   - Install Node.js dependencies
+
+2. **Regular startup:**
+   ```bash
+   ./run.sh
+   ```
+   This will automatically:
+   - Start IPFS daemon
+   - Start the Flask backend server
+   - Launch the React frontend
+   - Set up all necessary connections
+
+3. **Access the application:**
+   - Frontend: http://localhost:3000
+   - Backend: http://localhost:5000
+   - IPFS Gateway: http://localhost:8080
+
+4. **Stop all services:**
+   - Press Ctrl+C in the terminal running the script
+   - The script will gracefully shut down all services
+
+The script includes:
+- Dependency checks
+- Environment setup
+- Port management
+- Process cleanup
+- Error handling
 
 ---
 
