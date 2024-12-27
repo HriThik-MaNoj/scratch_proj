@@ -152,16 +152,42 @@ BlockSnap/
 
 ### Prerequisites
 
+#### Hardware Requirements
+
+- **Raspberry Pi**
+  - Model 4B (2GB+ RAM) or 3B+
+  - MicroSD card (16GB+)
+  - Power supply (3A)
+
+- **Camera Module**
+  - Raspberry Pi Camera Module v2
+  - or compatible camera
+
+- **Optional Hardware**
+  - GPS Module (for location tagging)
+  - Touchscreen display
+  - GPIO buttons
+
+#### Software Requirements
+
+- **Operating System**
+  - Raspberry Pi OS (64-bit)
+  - or Ubuntu 22.04+
+
+- **Development Tools**
 - Python 3.11+
-- Node.js and npm
-- IPFS daemon
-- Conda (for environment management)
-- MetaMask wallet
-- BuildBear testnet access
+  - Node.js 16+
+  - npm/yarn
+  - Git
+
+- **Blockchain Tools**
+  - MetaMask
+  - Hardhat
+  - IPFS
 
 ### Installation
 
-1. **Clone the repository:**
+1. **System Setup**
    ```bash
    git clone <repository-url>
    cd BlockSnap
@@ -176,6 +202,17 @@ BlockSnap/
 
 3. **Install Node.js dependencies:**
    ```bash
+   # Clone repository
+   git clone https://github.com/yourusername/BlockSnap.git
+   cd BlockSnap
+
+   # Setup Python environment
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+
+   # Setup frontend
+   cd frontend
    npm install
    ```
 
@@ -196,9 +233,18 @@ BlockSnap/
    PRIVATE_KEY=<your-private-key>
 
    # IPFS Configuration
-   IPFS_HOST=http://127.0.0.1:5001
-   IPFS_GATEWAY=http://127.0.0.1:8080
+   IPFS_HOST=/ip4/127.0.0.1/tcp/5001
+   IPFS_GATEWAY=https://ipfs.io
    USE_PINATA=false
+   PINATA_API_KEY=your_pinata_api_key
+   PINATA_SECRET_KEY=your_pinata_secret_key
+
+   # Hardware Configuration
+   CAMERA_RESOLUTION=1920x1080
+   SHUTTER_PIN=17
+   LED_PIN=27
+   USE_GPS=false
+   GPS_PORT=/dev/ttyUSB0
    ```
 
 ### Smart Contract Deployment
