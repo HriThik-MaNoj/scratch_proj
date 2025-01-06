@@ -42,7 +42,6 @@ class DashcamManager:
             # Start upload thread
             self.is_recording = True
             self.upload_thread = threading.Thread(target=self._upload_loop)
-            self.upload_thread.daemon = True  # Make thread daemon so it exits when main thread exits
             self.upload_thread.start()
             
             self.logger.info(f"Started recording with session ID: {self.session_id}")
@@ -81,7 +80,6 @@ class DashcamManager:
 
     def _upload_loop(self) -> None:
         """Main upload loop"""
-        chunk_count = 0
         while self.is_recording or not self.recorder.chunk_queue.empty():
             try:
                 # Get next chunk
@@ -89,28 +87,20 @@ class DashcamManager:
                 if not chunk:
                     continue
                 
-                chunk_count += 1
-                self.logger.info(f"Processing chunk {chunk_count}")
-                
                 # Add to batch processor
                 self.batch_processor.add_chunk(chunk)
                 
                 # Get processed chunks
                 for result in self.batch_processor.get_recent_results():
-                    try:
-                        # Record on blockchain
-                        self.blockchain.add_video_chunk(
-                            self.session_id,
-                            {
-                                'sequence_number': result['sequence_number'],
-                                'video_cid': result['video_cid'],
-                                'metadata_cid': result['metadata_cid'],
-                                'timestamp': result['timestamp']
-                            }
-                        )
-                        self.logger.info(f"Recorded chunk {result['sequence_number']} on blockchain")
-                    except Exception as e:
-                        self.logger.error(f"Failed to record chunk on blockchain: {str(e)}")
+                    # Record on blockchain
+                    self.blockchain.add_video_chunk(
+                        self.session_id,
+                        {
+                            'sequence_number': result['sequence_number'],
+                            'video_cid': result['video_cid'],
+                            'metadata_cid': result['metadata_cid']
+                        }
+                    )
                 
             except Exception as e:
                 self.logger.error(f"Error in upload loop: {str(e)}")
@@ -119,18 +109,13 @@ class DashcamManager:
     def get_status(self) -> Dict:
         """Get current status"""
         try:
-            processor_stats = self.batch_processor.get_stats()
-            recorder_status = self.recorder.get_status()
-            
             return {
                 'is_recording': self.is_recording,
                 'session_id': self.session_id,
-                'recorder_status': recorder_status,
-                'processor_stats': processor_stats,
+                'recorder_status': self.recorder.get_status(),
+                'processor_stats': self.batch_processor.get_stats(),
                 'session_active': self.session_id is not None and 
-                                self.blockchain.is_session_active(self.session_id),
-                'total_chunks': processor_stats.get('total_processed', 0),
-                'latest_chunk': processor_stats.get('latest_chunk', None)
+                                self.blockchain.is_session_active(self.session_id)
             }
         except Exception as e:
             self.logger.error(f"Error getting status: {str(e)}")

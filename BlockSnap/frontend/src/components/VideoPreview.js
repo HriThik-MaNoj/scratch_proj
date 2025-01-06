@@ -13,77 +13,96 @@ import { Fullscreen, FullscreenExit } from '@mui/icons-material';
 
 const VideoPreview = ({ isRecording }) => {
   const videoRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null);
   const [error, setError] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [latestChunk, setLatestChunk] = useState(null);
 
-  // Initialize camera stream
+  // Handle preview stream
   useEffect(() => {
-    async function initializeCamera() {
-      try {
-        // Get camera access
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
-          },
-          audio: true
-        });
-
-        // Store stream reference
-        streamRef.current = stream;
-
-        // Set stream to video element
-        const videoElement = videoRef.current;
-        if (videoElement) {
-          videoElement.srcObject = stream;
-        }
-
-        // Initialize MediaRecorder
-        mediaRecorderRef.current = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=vp9',
-          videoBitsPerSecond: 2500000 // 2.5 Mbps
-        });
-
-      } catch (err) {
-        console.error('Error accessing camera:', err);
-        setError('Failed to access camera. Please make sure you have granted camera permissions.');
-      }
+    if (!isRecording) {
+      return;
     }
 
-    initializeCamera();
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
 
-    // Cleanup
+    // Create MediaSource
+    const mediaSource = new MediaSource();
+    videoElement.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', () => {
+      const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+      
+      // Function to fetch and append chunks
+      const fetchChunk = async () => {
+        try {
+          const response = await fetch('/api/dashcam/latest-chunk');
+          if (!response.ok) throw new Error('Failed to fetch chunk');
+          
+          const data = await response.json();
+          if (data.status === 'success') {
+            setLatestChunk(data.data);
+            
+            // Fetch video data
+            const videoResponse = await fetch(data.data.video_url);
+            const videoBuffer = await videoResponse.arrayBuffer();
+            
+            // Append to source buffer
+            if (!sourceBuffer.updating) {
+              sourceBuffer.appendBuffer(videoBuffer);
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching chunk:', err);
+        }
+      };
+
+      // Fetch chunks periodically
+      const interval = setInterval(fetchChunk, 1000);
+      return () => clearInterval(interval);
+    });
+
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+      URL.revokeObjectURL(videoElement.src);
+    };
+  }, [isRecording]);
+
+  // Handle preview stream for live view
+  useEffect(() => {
+    if (!isRecording) {
+      return;
+    }
+
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    // Set up preview stream
+    const previewUrl = '/api/dashcam/preview';
+    
+    // Create image element for preview
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      
+      // Draw frame
+      ctx.drawImage(img, 0, 0);
+      
+      // Update video texture
+      if (videoElement) {
+        videoElement.srcObject = canvas.captureStream(30);
       }
     };
-  }, []);
 
-  // Handle recording state
-  useEffect(() => {
-    if (!mediaRecorderRef.current || !streamRef.current) return;
+    // Fetch frames
+    const fetchFrame = () => {
+      img.src = `${previewUrl}?t=${Date.now()}`;
+    };
 
-    if (isRecording) {
-      try {
-        mediaRecorderRef.current.start();
-      } catch (err) {
-        console.error('Error starting recording:', err);
-        setError('Failed to start recording');
-      }
-    } else {
-      try {
-        if (mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop();
-        }
-      } catch (err) {
-        console.error('Error stopping recording:', err);
-      }
-    }
+    const interval = setInterval(fetchFrame, 1000 / 30);
+    return () => clearInterval(interval);
   }, [isRecording]);
 
   const toggleFullscreen = () => {
@@ -150,7 +169,7 @@ const VideoPreview = ({ isRecording }) => {
             }}
           />
           
-          {!isRecording && !streamRef.current && (
+          {!isRecording && (
             <Box
               sx={{
                 position: 'absolute',
@@ -161,7 +180,7 @@ const VideoPreview = ({ isRecording }) => {
               }}
             >
               <Typography variant="body1" color="white">
-                Initializing camera...
+                Start recording to see preview
               </Typography>
             </Box>
           )}

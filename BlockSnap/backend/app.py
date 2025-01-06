@@ -231,7 +231,6 @@ def get_nfts_by_wallet(wallet_address):
         app.logger.error(f"Error in get NFTs endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Video capture routes
 @app.route('/api/dashcam/start', methods=['POST'])
 def start_dashcam():
     """Start dashcam recording"""
@@ -248,7 +247,6 @@ def start_dashcam():
             'message': 'Failed to start recording'
         }), 500
     except Exception as e:
-        app.logger.error(f"Error starting recording: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -264,7 +262,6 @@ def stop_dashcam():
             'message': 'Recording stopped'
         })
     except Exception as e:
-        app.logger.error(f"Error stopping recording: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -280,14 +277,13 @@ def get_dashcam_status():
             'data': status
         })
     except Exception as e:
-        app.logger.error(f"Error getting status: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 500
 
 @app.route('/api/dashcam/preview', methods=['GET'])
-def get_dashcam_preview():
+def get_preview_stream():
     """Get video preview stream"""
     try:
         def generate_frames():
@@ -308,14 +304,11 @@ def get_dashcam_preview():
         )
     except Exception as e:
         app.logger.error(f"Error in preview stream: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dashcam/latest-chunk', methods=['GET'])
-def get_dashcam_latest_chunk():
-    """Get latest recorded chunk"""
+def get_latest_chunk():
+    """Get latest recorded chunk URL"""
     try:
         if not dashcam_manager.is_recording:
             return jsonify({
@@ -338,7 +331,6 @@ def get_dashcam_latest_chunk():
             'message': 'No chunks available'
         }), 404
     except Exception as e:
-        app.logger.error(f"Error getting latest chunk: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)
