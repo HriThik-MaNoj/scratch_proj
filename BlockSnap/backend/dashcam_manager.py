@@ -3,6 +3,8 @@
 import logging
 import threading
 from typing import Optional, Dict
+from datetime import datetime
+import time
 from .video_handler import DashcamRecorder
 from .ipfs_handler import IPFSHandler
 from .blockchain_handler import BlockchainHandler
@@ -23,6 +25,8 @@ class DashcamManager:
         self.session_id: Optional[int] = None
         self.is_recording = False
         self.upload_thread: Optional[threading.Thread] = None
+        self.current_session_chunks = []
+        self.session_start_time = None
         
         self.logger.info("DashcamManager initialized")
 
@@ -31,6 +35,7 @@ class DashcamManager:
         try:
             # Start blockchain session
             self.session_id = self.blockchain.start_video_session()
+            self.session_start_time = datetime.now()
             
             # Start video recording
             if not self.recorder.start_recording():
@@ -41,6 +46,7 @@ class DashcamManager:
             
             # Start upload thread
             self.is_recording = True
+            self.current_session_chunks = []
             self.upload_thread = threading.Thread(target=self._upload_loop)
             self.upload_thread.start()
             
@@ -80,28 +86,36 @@ class DashcamManager:
 
     def _upload_loop(self) -> None:
         """Main upload loop"""
-        while self.is_recording or not self.recorder.chunk_queue.empty():
+        while self.is_recording:
             try:
-                # Get next chunk
                 chunk = self.recorder.get_next_chunk()
-                if not chunk:
-                    continue
-                
-                # Add to batch processor
-                self.batch_processor.add_chunk(chunk)
-                
-                # Get processed chunks
-                for result in self.batch_processor.get_recent_results():
-                    # Record on blockchain
-                    self.blockchain.add_video_chunk(
-                        self.session_id,
-                        {
-                            'sequence_number': result['sequence_number'],
-                            'video_cid': result['video_cid'],
-                            'metadata_cid': result['metadata_cid']
-                        }
-                    )
-                
+                if chunk:
+                    # Add session metadata
+                    chunk.metadata.update({
+                        'session_id': self.session_id,
+                        'session_start_time': self.session_start_time.isoformat(),
+                        'chunk_number': len(self.current_session_chunks) + 1
+                    })
+                    
+                    # Add to batch processor
+                    self.batch_processor.add_chunk(chunk)
+                    self.current_session_chunks.append(chunk)
+                    
+                    # Process results
+                    results = self.batch_processor.get_latest_results()
+                    for result in results:
+                        if result.get('success'):
+                            self.blockchain.add_video_chunk(
+                                self.session_id,
+                                {
+                                    'video_cid': result['video_cid'],
+                                    'metadata_cid': result['metadata_cid'],
+                                    'sequence_number': result['sequence_number']
+                                }
+                            )
+                else:
+                    time.sleep(0.1)
+                    
             except Exception as e:
                 self.logger.error(f"Error in upload loop: {str(e)}")
                 continue

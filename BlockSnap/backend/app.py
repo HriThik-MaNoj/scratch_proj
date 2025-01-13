@@ -213,11 +213,26 @@ def get_nfts_by_wallet(wallet_address):
                     metadata_uri = blockchain_handler.get_token_uri(token_id)
                     image_cid = blockchain_handler.get_image_cid(token_id)
                     
+                    # Get transaction hash from the event log
+                    transaction_hash = decoded_log.transactionHash.hex()
+                    
+                    # Get metadata from IPFS if available
+                    try:
+                        metadata = ipfs_handler.get_json(metadata_uri.replace('ipfs://', ''))
+                    except:
+                        metadata = {
+                            'name': f'BlockSnap #{token_id}',
+                            'description': 'A photo captured using BlockSnap'
+                        }
+                    
                     nft = {
-                        'token_id': token_id,
-                        'metadata_uri': metadata_uri,
+                        'tokenId': token_id,  # Changed to match frontend
+                        'name': metadata.get('name', f'BlockSnap #{token_id}'),
+                        'description': metadata.get('description', 'A photo captured using BlockSnap'),
+                        'image': ipfs_handler.get_ipfs_url(image_cid),  # Direct image URL
                         'image_cid': image_cid,
-                        'image_url': ipfs_handler.get_ipfs_url(image_cid)
+                        'metadata_uri': metadata_uri,
+                        'transaction_hash': transaction_hash
                     }
                     nfts.append(nft)
                     app.logger.info(f"Found NFT {token_id} owned by {wallet_address}")
@@ -334,6 +349,35 @@ def get_latest_chunk():
         return jsonify({
             'status': 'error',
             'message': str(e)
+        }), 500
+
+@app.route('/video-sessions/<wallet_address>', methods=['GET'])
+def get_video_sessions(wallet_address):
+    """Get all video sessions for a wallet"""
+    try:
+        # Get sessions from blockchain
+        sessions = blockchain_handler.get_video_sessions(wallet_address)
+        
+        # Enhance session data with IPFS metadata
+        for session in sessions:
+            for chunk in session['chunks']:
+                # Get metadata from IPFS
+                metadata = ipfs_handler.get_json(chunk['metadata_cid'])
+                chunk.update(metadata)
+                
+                # Add IPFS gateway URL
+                chunk['video_url'] = f"https://ipfs.io/ipfs/{chunk['video_cid']}"
+        
+        return jsonify({
+            'success': True,
+            'sessions': sessions
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get video sessions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 def cleanup():
