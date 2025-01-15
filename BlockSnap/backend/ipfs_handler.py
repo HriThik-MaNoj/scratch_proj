@@ -274,10 +274,69 @@ class IPFSHandler:
             self.logger.error(f"Error uploading to IPFS: {str(e)}")
             raise
 
+    def _clean_cid(self, cid: str) -> str:
+        """Clean and normalize IPFS CID"""
+        try:
+            if not cid:
+                return ""
+                
+            # Remove any protocol prefix
+            if cid.startswith('ipfs://'):
+                cid = cid[7:]
+            elif cid.startswith(('http://', 'https://')):
+                parts = cid.split('/ipfs/')
+                if len(parts) > 1:
+                    cid = parts[-1]
+                    
+            # Clean any query params or trailing chars
+            cid = cid.split('?')[0].rstrip('/')
+            return cid
+        except Exception as e:
+            self.logger.error(f"Error cleaning CID {cid}: {str(e)}")
+            return cid
+
     def get_ipfs_url(self, cid: str) -> str:
-        """Get a gateway URL for the IPFS content"""
-        return f"{self.ipfs_gateway}/ipfs/{cid}"
-    
+        """Get public gateway URL for IPFS content"""
+        try:
+            clean_cid = self._clean_cid(cid)
+            if not clean_cid:
+                return ""
+            return f"{self.ipfs_gateway}/ipfs/{clean_cid}"
+        except Exception as e:
+            self.logger.error(f"Error generating IPFS URL for {cid}: {str(e)}")
+            return f"{self.ipfs_gateway}/ipfs/{cid}"
+
+    def get_json(self, cid: str) -> dict:
+        """Get JSON content from IPFS by CID"""
+        try:
+            clean_cid = self._clean_cid(cid)
+            if not clean_cid:
+                return {}
+                
+            # Try gateway first
+            try:
+                gateway_url = f"{self.ipfs_gateway}/ipfs/{clean_cid}"
+                response = requests.get(gateway_url, timeout=5)
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                self.logger.warning(f"Failed to get JSON from gateway: {str(e)}")
+                
+            # Fallback to local node
+            try:
+                api_url = f"{self.ipfs_host}/api/v0/cat"
+                params = {'arg': clean_cid}
+                response = requests.post(api_url, params=params, timeout=5)
+                response.raise_for_status()
+                return json.loads(response.text)
+            except Exception as e:
+                self.logger.error(f"Failed to get JSON from IPFS: {str(e)}")
+                return {}
+                
+        except Exception as e:
+            self.logger.error(f"Error in get_json for {cid}: {str(e)}")
+            return {}
+
     def verify_content(self, cid: str) -> bool:
         """Verify if content exists on IPFS"""
         try:
@@ -307,6 +366,54 @@ class IPFSHandler:
             self.logger.info(f"Successfully pinned CID to Pinata: {cid}")
         except Exception as e:
             self.logger.error(f"Error pinning to Pinata: {str(e)}")
+            raise
+
+    def add_bytes(self, data: bytes, filename: str = None) -> str:
+        """Add bytes data to IPFS and return its CID"""
+        try:
+            if self.use_pinata:
+                # Use Pinata for file upload
+                files = {
+                    'file': (filename or 'content.bin', data)
+                }
+                
+                headers = {
+                    'pinata_api_key': self.pinata_api_key,
+                    'pinata_secret_api_key': self.pinata_secret_key
+                }
+                
+                response = requests.post(
+                    'https://api.pinata.cloud/pinning/pinFileToIPFS',
+                    files=files,
+                    headers=headers
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                cid = result['IpfsHash']
+            else:
+                # Use local IPFS node
+                files = {
+                    'file': (filename or 'content.bin', data)
+                }
+                
+                response = requests.post(
+                    f"{self.ipfs_host}/api/v0/add",
+                    files=files
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                cid = result['Hash']
+                
+                # Pin the file locally
+                self.pin_file(cid)
+            
+            self.logger.info(f"Added bytes to IPFS with CID: {cid}")
+            return cid
+            
+        except Exception as e:
+            self.logger.error(f"Error adding bytes to IPFS: {str(e)}")
             raise
 
 if __name__ == "__main__":

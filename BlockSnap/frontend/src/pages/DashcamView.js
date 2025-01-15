@@ -8,22 +8,63 @@ import {
   useToast,
   Progress,
   Badge,
+  Center,
+  Spinner,
 } from '@chakra-ui/react';
 import Webcam from 'react-webcam';
 import { useWeb3React } from '@web3-react/core';
-import { MdFiberManualRecord, MdStop, MdSave } from 'react-icons/md';
+import { MdFiberManualRecord, MdStop } from 'react-icons/md';
 import axios from 'axios';
+
+const videoConstraints = {
+  width: 1280,
+  height: 720,
+  facingMode: "environment"
+};
 
 function DashcamView() {
   const webcamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const { account, active } = useWeb3React();
   const toast = useToast();
 
+  // Initialize camera stream
+  useEffect(() => {
+    async function initializeStream() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: videoConstraints,
+          audio: false 
+        });
+        streamRef.current = stream;
+        setIsInitialized(true);
+      } catch (err) {
+        toast({
+          title: 'Camera Error',
+          description: 'Failed to access camera: ' + err.message,
+          status: 'error',
+          duration: 5000,
+        });
+      }
+    }
+
+    if (active && !isInitialized) {
+      initializeStream();
+    }
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [active, toast]);
+
+  // Recording timer
   useEffect(() => {
     let interval;
     if (recording) {
@@ -35,63 +76,69 @@ function DashcamView() {
   }, [recording]);
 
   const startRecording = async () => {
-    if (!active) {
-      toast({
-        title: 'Wallet not connected',
-        description: 'Please connect your MetaMask wallet first.',
-        status: 'error',
-        duration: 5000,
-      });
-      return;
-    }
-
-    chunksRef.current = [];
-    const stream = webcamRef.current.video.srcObject;
-    mediaRecorderRef.current = new MediaRecorder(stream, {
-      mimeType: 'video/webm',
-    });
-
-    mediaRecorderRef.current.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        chunksRef.current.push(e.data);
-      }
-    };
-
-    mediaRecorderRef.current.start(1000); // Collect data every second
-    setRecording(true);
-    setRecordingTime(0);
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current.stop();
-    setRecording(false);
-  };
-
-  const saveRecording = async () => {
     try {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const file = new File([blob], 'dashcam.webm', { type: 'video/webm' });
+      if (!active) {
+        toast({
+          title: 'Wallet not connected',
+          description: 'Please connect your wallet first.',
+          status: 'error',
+          duration: 5000,
+        });
+        return;
+      }
 
-      const formData = new FormData();
-      formData.append('video', file);
-      formData.append('wallet_address', account);
-      formData.append('duration', recordingTime);
+      if (!streamRef.current) {
+        toast({
+          title: 'Camera not ready',
+          description: 'Please wait for camera initialization.',
+          status: 'error',
+          duration: 5000,
+        });
+        return;
+      }
 
-      const result = await axios.post('http://localhost:5000/capture/video', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // Start backend recording session
+      const response = await axios.post('http://localhost:5000/dashcam/start');
+      if (!response.data.session_id) {
+        throw new Error('Failed to start recording session');
+      }
+      setSessionId(response.data.session_id);
+
+      // Start local recording
+      mediaRecorderRef.current = new MediaRecorder(streamRef.current, {
+        mimeType: 'video/webm;codecs=h264',
+        videoBitsPerSecond: 2500000 // 2.5 Mbps
       });
+
+      mediaRecorderRef.current.ondataavailable = async (e) => {
+        if (e.data && e.data.size > 0) {
+          const chunk = new Blob([e.data], { type: 'video/webm' });
+          const formData = new FormData();
+          formData.append('video', chunk);
+          formData.append('session_id', sessionId);
+          formData.append('timestamp', Date.now());
+          
+          try {
+            await axios.post('http://localhost:5000/dashcam/chunk', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+          } catch (err) {
+            console.error('Failed to upload chunk:', err);
+          }
+        }
+      };
+
+      mediaRecorderRef.current.start(15000); // Create a chunk every 15 seconds
+      setRecording(true);
+      setRecordingTime(0);
 
       toast({
-        title: 'Success!',
-        description: `Video saved and minted as NFT. Token ID: ${result.data.data.token_id}`,
+        title: 'Recording Started',
+        description: 'Video recording has begun.',
         status: 'success',
-        duration: 5000,
+        duration: 3000,
       });
 
-      chunksRef.current = [];
-      setRecordingTime(0);
     } catch (error) {
       toast({
         title: 'Error',
@@ -102,124 +149,85 @@ function DashcamView() {
     }
   };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const stopRecording = async () => {
+    try {
+      if (mediaRecorderRef.current && recording) {
+        mediaRecorderRef.current.stop();
+        await axios.post('http://localhost:5000/dashcam/stop');
+        setRecording(false);
+        setSessionId(null);
+        
+        toast({
+          title: 'Recording Stopped',
+          description: 'Video session has been saved.',
+          status: 'success',
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+      });
+    }
   };
 
-  const videoConstraints = {
-    width: 1280,
-    height: 720,
-    facingMode: "environment"
-  };
+  if (!isInitialized) {
+    return (
+      <Center h="500px">
+        <VStack spacing={4}>
+          <Spinner size="xl" />
+          <Text>Initializing camera...</Text>
+        </VStack>
+      </Center>
+    );
+  }
 
   return (
-    <Box>
-      <VStack spacing={8} align="center">
-        <Box
-          w="100%"
-          maxW="1280px"
-          h="720px"
-          bg="gray.800"
-          borderRadius="lg"
-          overflow="hidden"
-          position="relative"
-        >
+    <Box p={4}>
+      <VStack spacing={4} align="stretch">
+        <Box borderWidth={1} borderRadius="lg" overflow="hidden">
           <Webcam
-            audio={true}
             ref={webcamRef}
+            audio={false}
             videoConstraints={videoConstraints}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
+            width="100%"
           />
-          
-          {recording && (
-            <Badge
-              position="absolute"
-              top="4"
-              right="4"
-              colorScheme="red"
-              variant="solid"
-              display="flex"
-              alignItems="center"
-            >
-              <Box
-                as="span"
-                w="2"
-                h="2"
-                borderRadius="full"
-                bg="red.500"
-                mr="2"
-                animation="blink 1s infinite"
-              />
-              Recording {formatTime(recordingTime)}
-            </Badge>
-          )}
-
-          <Box
-            position="absolute"
-            bottom="4"
-            left="50%"
-            transform="translateX(-50%)"
-            w="90%"
-          >
-            <VStack spacing={4}>
-              <Progress
-                value={(recordingTime / (5 * 60)) * 100}
-                w="100%"
-                colorScheme="blue"
-                bg="gray.700"
-                borderRadius="full"
-                display={recording ? 'block' : 'none'}
-              />
-              
-              <HStack spacing={4}>
-                {!recording ? (
-                  <Button
-                    leftIcon={<MdFiberManualRecord />}
-                    colorScheme="red"
-                    size="lg"
-                    onClick={startRecording}
-                  >
-                    Start Recording
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      leftIcon={<MdStop />}
-                      colorScheme="red"
-                      size="lg"
-                      onClick={stopRecording}
-                    >
-                      Stop
-                    </Button>
-                    <Button
-                      leftIcon={<MdSave />}
-                      colorScheme="blue"
-                      size="lg"
-                      onClick={saveRecording}
-                    >
-                      Save & Mint
-                    </Button>
-                  </>
-                )}
-              </HStack>
-            </VStack>
-          </Box>
         </Box>
 
-        <Text color="gray.400">
-          {active
-            ? 'Record dashcam footage and mint it as an NFT'
-            : 'Please connect your wallet to mint NFTs'}
-        </Text>
+        <HStack justify="center" spacing={4}>
+          {!recording ? (
+            <Button
+              leftIcon={<MdFiberManualRecord />}
+              colorScheme="red"
+              onClick={startRecording}
+              isDisabled={!active}
+            >
+              Start Recording
+            </Button>
+          ) : (
+            <Button
+              leftIcon={<MdStop />}
+              colorScheme="gray"
+              onClick={stopRecording}
+            >
+              Stop Recording
+            </Button>
+          )}
+        </HStack>
+
+        {recording && (
+          <VStack spacing={2}>
+            <Badge colorScheme="red">Recording</Badge>
+            <Text>Duration: {new Date(recordingTime * 1000).toISOString().substr(11, 8)}</Text>
+            <Progress size="sm" isIndeterminate colorScheme="red" w="100%" />
+          </VStack>
+        )}
       </VStack>
     </Box>
   );
 }
 
-export default DashcamView; 
+export default DashcamView;

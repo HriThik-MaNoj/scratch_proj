@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 
-from flask import Flask, jsonify, request, Response
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
-import logging
-from pathlib import Path
+import cv2
+import numpy as np
 import os
-import platform
+import time
+import logging
 from dotenv import load_dotenv
 from datetime import datetime
+from pathlib import Path
+import platform
 import json
-import cv2
-import time
+import base64
+import tempfile
 
 # Import our custom modules
 try:
@@ -24,7 +27,8 @@ except (ImportError, RuntimeError):
 
 from backend.ipfs_handler import IPFSHandler
 from backend.blockchain_handler import BlockchainHandler
-from backend.dashcam_manager import DashcamManager  # Import DashcamManager
+from backend.dashcam_manager import DashcamManager
+from backend.video_handler import VideoChunk  # Import VideoChunk from video_handler instead
 
 # Load environment variables
 load_dotenv()
@@ -217,19 +221,16 @@ def get_nfts_by_wallet(wallet_address):
                     transaction_hash = decoded_log.transactionHash.hex()
                     
                     # Get metadata from IPFS if available
-                    try:
-                        metadata = ipfs_handler.get_json(metadata_uri.replace('ipfs://', ''))
-                    except:
-                        metadata = {
-                            'name': f'BlockSnap #{token_id}',
-                            'description': 'A photo captured using BlockSnap'
-                        }
+                    metadata = ipfs_handler.get_json(metadata_uri) or {
+                        'name': f'BlockSnap #{token_id}',
+                        'description': 'A photo captured using BlockSnap'
+                    }
                     
                     nft = {
-                        'tokenId': token_id,  # Changed to match frontend
+                        'tokenId': token_id,
                         'name': metadata.get('name', f'BlockSnap #{token_id}'),
                         'description': metadata.get('description', 'A photo captured using BlockSnap'),
-                        'image': ipfs_handler.get_ipfs_url(image_cid),  # Direct image URL
+                        'image': ipfs_handler.get_ipfs_url(image_cid),
                         'image_cid': image_cid,
                         'metadata_uri': metadata_uri,
                         'transaction_hash': transaction_hash
@@ -246,56 +247,128 @@ def get_nfts_by_wallet(wallet_address):
         app.logger.error(f"Error in get NFTs endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dashcam/start', methods=['POST'])
-def start_dashcam():
-    """Start dashcam recording"""
+@app.route('/video-sessions/<wallet_address>', methods=['GET'])
+def get_video_sessions(wallet_address):
+    """Get all video sessions for a wallet"""
     try:
-        success = dashcam_manager.start_recording()
-        if success:
-            return jsonify({
-                'status': 'success',
-                'message': 'Recording started',
-                'session_id': dashcam_manager.session_id
-            })
-        return jsonify({
-            'status': 'error',
-            'message': 'Failed to start recording'
-        }), 500
+        sessions = blockchain_handler.get_video_sessions(wallet_address)
+        
+        # Enhance session data with IPFS content
+        for session in sessions:
+            session_id = session.get('session_id')
+            try:
+                chunks = []
+                for chunk in session.get('chunks', []):
+                    try:
+                        # Check if video is available in IPFS
+                        is_available = ipfs_handler.verify_content(chunk['video_cid'])
+                        chunk_data = {
+                            'video_cid': chunk['video_cid'],
+                            'sequence_number': chunk['sequence_number'],
+                            'timestamp': chunk['timestamp'],
+                            'transaction_hash': chunk.get('transaction_hash', ''),
+                            'status': 'ready' if is_available else 'unavailable'
+                        }
+                        if is_available:
+                            chunk_data['video_url'] = ipfs_handler.get_ipfs_url(chunk['video_cid'])
+                        chunks.append(chunk_data)
+                        app.logger.info(f"Chunk {chunk['video_cid']} status: {'available' if is_available else 'unavailable'}")
+                    except Exception as e:
+                        app.logger.error(f"Error processing chunk: {str(e)}")
+                        chunks.append({
+                            'video_cid': chunk.get('video_cid', ''),
+                            'sequence_number': chunk.get('sequence_number', 0),
+                            'status': 'error',
+                            'error': str(e)
+                        })
+                
+                # Sort chunks by sequence number
+                session['chunks'] = sorted(chunks, key=lambda x: x['sequence_number'])
+                
+            except Exception as e:
+                app.logger.error(f"Error processing session {session_id}: {str(e)}")
+                session['status'] = 'error'
+                session['error'] = str(e)
+        
+        return jsonify({'sessions': sessions})
+        
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        app.logger.error(f"Error getting video sessions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dashcam/stop', methods=['POST'])
-def stop_dashcam():
-    """Stop dashcam recording"""
-    try:
-        dashcam_manager.stop_recording()
-        return jsonify({
-            'status': 'success',
-            'message': 'Recording stopped'
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@app.route('/api/dashcam/status', methods=['GET'])
-def get_dashcam_status():
-    """Get dashcam status"""
+@app.route('/video-sessions/<session_id>/status', methods=['GET'])
+def get_session_status(session_id):
+    """Get status of a specific video session"""
     try:
         status = dashcam_manager.get_status()
-        return jsonify({
-            'status': 'success',
-            'data': status
-        })
+        if status.get('session_id') == int(session_id):
+            return jsonify(status)
+        
+        # Session not active, get from blockchain
+        session = blockchain_handler.get_video_session(session_id)
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+            
+        return jsonify(session)
+        
     except Exception as e:
+        app.logger.error(f"Error getting session status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/dashcam/start', methods=['POST'])
+def start_recording():
+    """Start dashcam recording"""
+    try:
+        if dashcam_manager.is_recording:
+            return jsonify({'error': 'Recording already in progress'}), 400
+            
+        success = dashcam_manager.start_recording()
+        if not success:
+            return jsonify({
+                'error': 'Failed to start recording',
+                'details': dashcam_manager.last_error
+            }), 500
+            
         return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+            'status': 'started',
+            'session_id': dashcam_manager.session_id
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error starting recording: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/dashcam/stop', methods=['POST'])
+def stop_recording():
+    """Stop dashcam recording"""
+    try:
+        if not dashcam_manager.is_recording:
+            return jsonify({'error': 'No recording in progress'}), 400
+            
+        session_id = dashcam_manager.session_id
+        dashcam_manager.stop_recording()
+        
+        return jsonify({
+            'status': 'stopped',
+            'session_id': session_id,
+            'error_count': dashcam_manager.error_count,
+            'last_error': dashcam_manager.last_error
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error stopping recording: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/dashcam/status', methods=['GET'])
+def get_recording_status():
+    """Get current recording status"""
+    try:
+        status = dashcam_manager.get_status()
+        return jsonify(status)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dashcam/preview', methods=['GET'])
 def get_preview_stream():
@@ -351,34 +424,48 @@ def get_latest_chunk():
             'message': str(e)
         }), 500
 
-@app.route('/video-sessions/<wallet_address>', methods=['GET'])
-def get_video_sessions(wallet_address):
-    """Get all video sessions for a wallet"""
+@app.route('/dashcam/chunk', methods=['POST'])
+def upload_chunk():
+    """Handle video chunk upload"""
     try:
-        # Get sessions from blockchain
-        sessions = blockchain_handler.get_video_sessions(wallet_address)
+        if 'video' not in request.files:
+            return jsonify({'error': 'No video file provided'}), 400
+            
+        video_file = request.files['video']
+        session_id = request.form.get('session_id')
+        timestamp = request.form.get('timestamp')
         
-        # Enhance session data with IPFS metadata
-        for session in sessions:
-            for chunk in session['chunks']:
-                # Get metadata from IPFS
-                metadata = ipfs_handler.get_json(chunk['metadata_cid'])
-                chunk.update(metadata)
-                
-                # Add IPFS gateway URL
-                chunk['video_url'] = f"https://ipfs.io/ipfs/{chunk['video_cid']}"
+        if not session_id:
+            return jsonify({'error': 'No session ID provided'}), 400
+            
+        # Create chunk metadata
+        metadata = {
+            'timestamp': timestamp,
+            'session_id': session_id,
+            'content_type': video_file.content_type,
+            'size': len(video_file.read())
+        }
+        video_file.seek(0)  # Reset file pointer after reading
+        
+        # Create chunk object
+        chunk = VideoChunk(
+            start_time=float(timestamp)/1000 if timestamp else time.time(),
+            data=video_file.read(),
+            sequence_number=dashcam_manager.current_chunk,
+            metadata=metadata
+        )
+        
+        # Add to upload queue
+        dashcam_manager.add_chunk(chunk)
         
         return jsonify({
-            'success': True,
-            'sessions': sessions
+            'status': 'success',
+            'chunk_number': chunk.sequence_number
         })
         
     except Exception as e:
-        logger.error(f"Failed to get video sessions: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        app.logger.error(f"Error handling chunk upload: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 def cleanup():
     """Cleanup resources on shutdown"""
