@@ -337,16 +337,45 @@ class IPFSHandler:
             self.logger.error(f"Error in get_json for {cid}: {str(e)}")
             return {}
 
-    def verify_content(self, cid: str) -> bool:
-        """Verify if content exists on IPFS"""
+    def verify_content(self, cid: str, timeout: int = 5) -> bool:
+        """
+        Verify if content exists in IPFS with timeout
+        Args:
+            cid: Content ID to verify
+            timeout: Timeout in seconds
+        Returns:
+            bool: True if content exists and is accessible
+        """
         try:
-            response = requests.post(
-                f"{self.ipfs_host}/api/v0/cat",
-                params={'arg': cid}
-            )
-            response.raise_for_status()
-            return True
-        except Exception:
+            if not cid:
+                return False
+                
+            # Try local node first with timeout
+            try:
+                response = requests.head(
+                    f"{self.ipfs_gateway}/ipfs/{cid}",
+                    timeout=timeout,
+                    allow_redirects=True
+                )
+                if response.status_code == 200:
+                    return True
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                self.logger.warning(f"Local IPFS gateway timeout for {cid}")
+                
+            # Fallback to public gateway with shorter timeout
+            try:
+                response = requests.head(
+                    f"https://ipfs.io/ipfs/{cid}",
+                    timeout=timeout/2,  # Shorter timeout for fallback
+                    allow_redirects=True
+                )
+                return response.status_code == 200
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                self.logger.warning(f"Public IPFS gateway timeout for {cid}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error verifying IPFS content {cid}: {str(e)}")
             return False
 
     def _pin_to_pinata(self, cid: str) -> None:

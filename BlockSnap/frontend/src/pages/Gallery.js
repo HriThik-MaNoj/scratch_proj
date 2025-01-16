@@ -58,17 +58,27 @@ function Gallery() {
   };
 
   const fetchMedia = useCallback(async () => {
-    if (!active || !account) return;
+    if (!active || !account) {
+      setLoading(false);
+      return;
+    }
     
     try {
-      const photosRes = await axios.get(`http://localhost:5000/nfts/${account}`);
-      console.log('Photos response:', photosRes.data);
+      setLoading(true);
       
+      // Fetch photos and video sessions in parallel
+      const [photosRes, sessionsRes] = await Promise.allSettled([
+        axios.get(`http://localhost:5000/nfts/${account}`),
+        axios.get(`http://localhost:5000/video-sessions/${account}`)
+      ]);
+
+      // Handle photos response
+      const photos = photosRes.status === 'fulfilled' ? photosRes.value.data.nfts || [] : [];
+      
+      // Handle video sessions response
       let videoSessions = [];
-      try {
-        const sessionsRes = await axios.get(`http://localhost:5000/video-sessions/${account}`);
-        // Deduplicate chunks in each session
-        videoSessions = sessionsRes.data.sessions.map(session => {
+      if (sessionsRes.status === 'fulfilled') {
+        videoSessions = sessionsRes.value.data.sessions.map(session => {
           // Create a map of unique chunks using sequence_number as key
           const uniqueChunks = new Map();
           session.chunks.forEach(chunk => {
@@ -80,22 +90,31 @@ function Gallery() {
           
           return {
             ...session,
-            chunks: Array.from(uniqueChunks.values()).sort((a, b) => a.sequence_number - b.sequence_number)
+            chunks: Array.from(uniqueChunks.values())
+              .sort((a, b) => a.sequence_number - b.sequence_number)
+              .map(chunk => ({
+                ...chunk,
+                retryCount: 0,
+                error: null
+              }))
           };
         });
-      } catch (err) {
-        console.warn('Video sessions not available:', err);
+      } else if (sessionsRes.status === 'rejected') {
+        console.warn('Video sessions fetch failed:', sessionsRes.reason);
+        toast({
+          title: 'Warning',
+          description: 'Could not load video sessions. Some content may be unavailable.',
+          status: 'warning',
+          duration: 5000,
+        });
       }
       
-      setMedia({
-        photos: photosRes.data.nfts || [],
-        videoSessions
-      });
+      setMedia({ photos, videoSessions });
     } catch (error) {
       console.error('Error fetching media:', error);
       toast({
         title: 'Error',
-        description: 'Failed to fetch media',
+        description: 'Failed to fetch media content',
         status: 'error',
         duration: 5000,
       });
@@ -107,6 +126,23 @@ function Gallery() {
   useEffect(() => {
     fetchMedia();
   }, [fetchMedia]);
+
+  useEffect(() => {
+    let interval;
+    const hasActiveSession = media.videoSessions.some(
+      session => session.status === 'recording'
+    );
+
+    if (hasActiveSession && active && account) {
+      interval = setInterval(fetchMedia, 30000); // 30 second refresh for active recordings
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [fetchMedia, media.videoSessions, active, account]);
 
   const handleImageError = useCallback((tokenId) => {
     setRetryCount(prev => {
